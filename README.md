@@ -1,5 +1,5 @@
 # Decky Profile Launcher
-This is an unfathomably niche use-case Decky plugin I used Claude to make for myself to use, but figured I'd share it because who knows, maybe someone else might land in this crazy rare pool of Steam Deck shell script users.
+A Decky Loader plugin for launching shell script-bound Steam shortcuts using profiles.
 
 ## Overview
 The plugin makes it so that when you launch a game in Steam that is tied to a shell (.sh) script in either its Target or Launch Options fields, a prompt appears that lets you select which profile to launch the game with. This expects that your shell script utilizes "profiles", meaning that it performs different operations depending on what value you've set a specific variable to (default `PROFILE`).
