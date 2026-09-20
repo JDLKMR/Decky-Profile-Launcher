@@ -85,9 +85,8 @@ const ProfileSetupModal: FC<Props> = ({
       </div>
 
       <div style={{ marginTop: "12px", opacity: 0.85 }}>
-        Choose which profiles this game should offer. You can come back here
-        anytime from the launch prompt, or edit toggles in more detail from
-        Change Profiles... in the Quick Access menu.
+        Choose which profiles this game should offer. You can change this any
+        time from the launch prompt or the plugin settings.
       </div>
 
       <Focusable
