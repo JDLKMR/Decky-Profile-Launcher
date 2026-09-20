@@ -13,6 +13,7 @@ Just watch out for Steam Input. It will be shared across all profiles, naturally
 ## Features
 - Add or remove profiles and name them
 - Rename profiles on a per-game basis (as well as revert them to default)
+- Works with both Steam and non-Steam games
 - Toggle whether a game always prompts you on launch
 - Choose which profiles a game will prompt you for
 - Add filename exclusions for .sh files
