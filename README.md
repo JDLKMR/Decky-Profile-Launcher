@@ -18,7 +18,7 @@ Just watch out for Steam Input. It will be shared across all profiles, naturally
 - Choose which profiles a game will prompt you for
 - Add filename exclusions for .sh files
 - Change the name of the variable it looks for to edit in the script
-- Save backups of your scripts upon first-time use
+- Save backups of your scripts upon first-time use (can be toggled off)
 
 ## Example Use
 Having one single Steam shortcut for The Legend of Zelda: Ocarina of Time, then using the script's profiles and this plugin to split it between:
