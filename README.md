@@ -27,3 +27,9 @@ Having one single Steam shortcut for The Legend of Zelda: Ocarina of Time, then 
 - Ocarina of Time Romhack
 - Ocarina of Time Archipelago
 - Ship of Harkinian
+
+## Building
+```
+npm install
+npm run build
+```
