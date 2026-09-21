@@ -6,13 +6,14 @@ The plugin makes it so that when you launch a game in Steam that is tied to a sh
 
 So for example if `PROFILE=2`, you can select Profile 2 in the launch prompt and it will then change the variable in the file to 2 before launching the game, allowing you to do just about anything you want from one single Steam shortcut.
 
-This minimizes the amount of split configuration (such as artwork, playtime, music, achievements, etc if you have other plugins) between shortcuts and centralizes everything into one game shortcut.
+This minimizes the amount of split configuration (such as artwork, playtime, music, achievements, etc. if you have other plugins) between shortcuts and centralizes everything into one game shortcut.
 
 Just watch out for Steam Input. It will be shared across all profiles, naturally.
 
 ## Features
 - Add or remove profiles and name them
 - Rename profiles on a per-game basis (as well as revert them to default)
+- Re-order profiles on a per-game basis (as well as revert them to default)
 - Works with both Steam and non-Steam games
 - Toggle whether a game always prompts you on launch
 - Choose which profiles a game will prompt you for
