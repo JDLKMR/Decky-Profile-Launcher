@@ -33,3 +33,5 @@ Having one single Steam shortcut for The Legend of Zelda: Ocarina of Time, then 
 npm install
 npm run build
 ```
+## AI Disclosure
+All programming was done using Claude. Testing, documentation, and any other writing is all done by me.
