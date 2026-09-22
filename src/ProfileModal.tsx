@@ -1,7 +1,7 @@
 import { DialogButton, Focusable, ModalRoot, ToggleField, showModal } from "@decky/ui";
 import { FC, useRef, useState } from "react";
 import { promptProfileSetup } from "./ProfileSetupModal";
-import { effectiveAllowedProfiles, effectiveProfileLabel, updateGame } from "./store";
+import { effectiveAllowedProfiles, effectiveProfileLabel, effectiveProfileOrder, updateGame } from "./store";
 
 export interface ProfileOption {
   /** The real, global profile number — what gets written into the script. */
@@ -73,7 +73,10 @@ const ProfileModal: FC<Props> = ({
     });
 
     const allowed = effectiveAllowedProfiles(config, allProfiles.length);
-    const nextOptions: ProfileOption[] = allowed.map((value) => ({
+    const order = effectiveProfileOrder(config, allProfiles.length).filter((v) =>
+      allowed.includes(v),
+    );
+    const nextOptions: ProfileOption[] = order.map((value) => ({
       value,
       label: effectiveProfileLabel(config, allProfiles, value),
     }));

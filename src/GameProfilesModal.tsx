@@ -1,17 +1,30 @@
 import { DialogButton, Focusable, ModalRoot, ToggleField } from "@decky/ui";
 import { FC, useEffect, useState } from "react";
-import { FaPen, FaUndo } from "react-icons/fa";
+import { FaChevronDown, FaChevronUp, FaPen, FaUndo } from "react-icons/fa";
 import { GameConfig, resolveScript } from "./backend";
 import { promptRenameProfile } from "./RenameProfileModal";
 import {
   effectiveAllowedProfiles,
   effectiveProfileLabel,
+  effectiveProfileOrder,
   gameConfig,
+  hasCustomProfileOrder,
   snapshot,
   updateGame,
 } from "./store";
 import { getLaunchInfo } from "./steam";
 import { basename } from "./util";
+
+const iconButtonStyle = {
+  padding: "0",
+  minWidth: "0",
+  width: "32px",
+  height: "32px",
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+} as const;
 
 interface Props {
   appId: string;
@@ -111,6 +124,21 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
     setConfig(await updateGame(appId, { profileNames: next }));
   };
 
+  const moveProfile = async (value: number, direction: -1 | 1) => {
+    const order = effectiveProfileOrder(config, profiles.length);
+    const index = order.indexOf(value);
+    const swapWith = index + direction;
+    if (swapWith < 0 || swapWith >= order.length) return; // already at an edge
+
+    const next = [...order];
+    [next[index], next[swapWith]] = [next[swapWith], next[index]];
+    setConfig(await updateGame(appId, { profileOrder: next }));
+  };
+
+  const resetOrder = async () => {
+    setConfig(await updateGame(appId, { profileOrder: [] }));
+  };
+
   return (
     <ModalRoot onCancel={closeModal} onEscKeypress={closeModal}>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -160,65 +188,70 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
           </DialogButton>
 
           {expanded && (
-            <Focusable style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              {profiles.map((_, index) => {
-                const value = index + 1;
-                const label = effectiveProfileLabel(config, profiles, value);
-                const hasOverride = !!config?.profileNames?.[String(value)]?.trim();
-                const isAllowed = allowed.includes(value);
-                const isLast = isAllowed && allowed.length <= 1;
-                return (
-                  <Focusable
-                    key={value}
-                    style={{ display: "flex", alignItems: "center", gap: "2px" }}
-                  >
-                    <div style={{ flexGrow: 1, minWidth: 0 }}>
-                      <ToggleField
-                        label={`${value}. ${label}`}
-                        description={
-                          isLast ? "At least one profile has to stay on." : undefined
-                        }
-                        checked={isAllowed}
-                        disabled={isLast}
-                        onChange={() => void toggleProfile(value)}
-                      />
-                    </div>
-                    <DialogButton
-                      onClick={() => void renameProfile(value)}
-                      style={{
-                        padding: "0",
-                        minWidth: "0",
-                        width: "32px",
-                        height: "32px",
-                        flexShrink: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
+            <>
+              {hasCustomProfileOrder(config, profiles.length) && (
+                <div style={{ marginBottom: "6px" }}>
+                  <DialogButton onClick={() => void resetOrder()}>
+                    Reset order to default
+                  </DialogButton>
+                </div>
+              )}
+
+              <Focusable style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                {effectiveProfileOrder(config, profiles.length).map((value, index, order) => {
+                  const label = effectiveProfileLabel(config, profiles, value);
+                  const hasOverride = !!config?.profileNames?.[String(value)]?.trim();
+                  const isAllowed = allowed.includes(value);
+                  const isLast = isAllowed && allowed.length <= 1;
+                  return (
+                    <Focusable
+                      key={value}
+                      style={{ display: "flex", alignItems: "center", gap: "2px" }}
                     >
-                      <FaPen size={11} />
-                    </DialogButton>
-                    {hasOverride && (
+                      <div style={{ flexGrow: 1, minWidth: 0 }}>
+                        <ToggleField
+                          label={`${index + 1}. ${label}`}
+                          description={
+                            isLast ? "At least one profile has to stay on." : undefined
+                          }
+                          checked={isAllowed}
+                          disabled={isLast}
+                          onChange={() => void toggleProfile(value)}
+                        />
+                      </div>
                       <DialogButton
-                        onClick={() => void clearProfileName(value)}
-                        style={{
-                          padding: "0",
-                          minWidth: "0",
-                          width: "32px",
-                          height: "32px",
-                          flexShrink: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
+                        onClick={() => void moveProfile(value, -1)}
+                        disabled={index === 0}
+                        style={iconButtonStyle}
                       >
-                        <FaUndo size={11} />
+                        <FaChevronUp size={11} />
                       </DialogButton>
-                    )}
-                  </Focusable>
-                );
-              })}
-            </Focusable>
+                      <DialogButton
+                        onClick={() => void moveProfile(value, 1)}
+                        disabled={index === order.length - 1}
+                        style={iconButtonStyle}
+                      >
+                        <FaChevronDown size={11} />
+                      </DialogButton>
+                      <DialogButton
+                        onClick={() => void renameProfile(value)}
+                        style={iconButtonStyle}
+                      >
+                        <FaPen size={11} />
+                      </DialogButton>
+                      {hasOverride && (
+                        <DialogButton
+                          onClick={() => void clearProfileName(value)}
+                          style={iconButtonStyle}
+                        >
+                          <FaUndo size={11} />
+                        </DialogButton>
+                      )}
+                    </Focusable>
+                  );
+                })}
+              </Focusable>
+            </>
           )}
         </>
       )}

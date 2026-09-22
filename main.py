@@ -32,6 +32,8 @@ DEFAULTS = {
     #   "configured": bool,  # has this game been through profile setup?
     #   "profileNames": dict[str, str],  # profile number (as string) -> this
     #                                    # game's display name override
+    #   "profileOrder": list[int],  # this game's display order (cosmetic
+    #                               # only); empty/missing = ascending
     # }
     "games": {},
 }
@@ -174,6 +176,7 @@ class Plugin:
             "allowedProfiles": [],
             "configured": False,
             "profileNames": {},
+            "profileOrder": [],
         })
         entry.update(patch or {})
         games[app_id] = entry

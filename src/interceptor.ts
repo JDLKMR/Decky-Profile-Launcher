@@ -5,6 +5,7 @@ import { promptProfileSetup } from "./ProfileSetupModal";
 import {
   effectiveAllowedProfiles,
   effectiveProfileLabel,
+  effectiveProfileOrder,
   gameConfig,
   hasNoScript,
   markNoScript,
@@ -168,7 +169,10 @@ async function handleLaunch(appId: string, knownGameId?: string) {
   }
 
   const allowed = effectiveAllowedProfiles(config, profiles.length);
-  const options: ProfileOption[] = allowed.map((value) => ({
+  const order = effectiveProfileOrder(config, profiles.length).filter((v) =>
+    allowed.includes(v),
+  );
+  const options: ProfileOption[] = order.map((value) => ({
     value,
     label: effectiveProfileLabel(config, profiles, value),
   }));

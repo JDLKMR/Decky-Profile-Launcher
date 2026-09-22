@@ -1,9 +1,26 @@
 import { DialogButton, Focusable, ModalRoot, ToggleField, showModal } from "@decky/ui";
 import { FC, useRef, useState } from "react";
-import { FaPen, FaUndo } from "react-icons/fa";
+import { FaChevronDown, FaChevronUp, FaPen, FaUndo } from "react-icons/fa";
 import { GameConfig } from "./backend";
 import { promptRenameProfile } from "./RenameProfileModal";
-import { effectiveProfileLabel, gameConfig, updateGame } from "./store";
+import {
+  effectiveProfileLabel,
+  effectiveProfileOrder,
+  gameConfig,
+  hasCustomProfileOrder,
+  updateGame,
+} from "./store";
+
+const iconButtonStyle = {
+  padding: "0",
+  minWidth: "0",
+  width: "32px",
+  height: "32px",
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+} as const;
 
 interface Props {
   appId: string;
@@ -75,6 +92,23 @@ const ProfileSetupModal: FC<Props> = ({
     setConfig(await updateGame(appId, { profileNames: next }));
   };
 
+  // Same immediate-save behavior as renaming — reordering isn't part of the
+  // checklist choice below, so it survives a Cancel too.
+  const moveProfile = async (value: number, direction: -1 | 1) => {
+    const order = effectiveProfileOrder(config, profiles.length);
+    const index = order.indexOf(value);
+    const swapWith = index + direction;
+    if (swapWith < 0 || swapWith >= order.length) return; // already at an edge
+
+    const next = [...order];
+    [next[index], next[swapWith]] = [next[swapWith], next[index]];
+    setConfig(await updateGame(appId, { profileOrder: next }));
+  };
+
+  const resetOrder = async () => {
+    setConfig(await updateGame(appId, { profileOrder: [] }));
+  };
+
   return (
     <ModalRoot onCancel={() => settle(null)} onEscKeypress={() => settle(null)}>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -89,6 +123,14 @@ const ProfileSetupModal: FC<Props> = ({
         time from the launch prompt or the plugin settings.
       </div>
 
+      {hasCustomProfileOrder(config, profiles.length) && (
+        <div style={{ marginTop: "12px" }}>
+          <DialogButton onClick={() => void resetOrder()}>
+            Reset order to default
+          </DialogButton>
+        </div>
+      )}
+
       <Focusable
         style={{
           display: "flex",
@@ -97,8 +139,7 @@ const ProfileSetupModal: FC<Props> = ({
           marginTop: "12px",
         }}
       >
-        {profiles.map((_, index) => {
-          const value = index + 1;
+        {effectiveProfileOrder(config, profiles.length).map((value, index, order) => {
           const label = effectiveProfileLabel(config, profiles, value);
           const hasOverride = !!config?.profileNames?.[String(value)]?.trim();
           const isOn = selected.includes(value);
@@ -110,7 +151,7 @@ const ProfileSetupModal: FC<Props> = ({
             >
               <div style={{ flexGrow: 1, minWidth: 0 }}>
                 <ToggleField
-                  label={`${value}. ${label}`}
+                  label={`${index + 1}. ${label}`}
                   description={
                     isLast ? "At least one profile has to stay on." : undefined
                   }
@@ -120,33 +161,26 @@ const ProfileSetupModal: FC<Props> = ({
                 />
               </div>
               <DialogButton
-                onClick={() => void renameProfile(value)}
-                style={{
-                  padding: "0",
-                  minWidth: "0",
-                  width: "32px",
-                  height: "32px",
-                  flexShrink: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                onClick={() => void moveProfile(value, -1)}
+                disabled={index === 0}
+                style={iconButtonStyle}
               >
+                <FaChevronUp size={11} />
+              </DialogButton>
+              <DialogButton
+                onClick={() => void moveProfile(value, 1)}
+                disabled={index === order.length - 1}
+                style={iconButtonStyle}
+              >
+                <FaChevronDown size={11} />
+              </DialogButton>
+              <DialogButton onClick={() => void renameProfile(value)} style={iconButtonStyle}>
                 <FaPen size={11} />
               </DialogButton>
               {hasOverride && (
                 <DialogButton
                   onClick={() => void clearProfileName(value)}
-                  style={{
-                    padding: "0",
-                    minWidth: "0",
-                    width: "32px",
-                    height: "32px",
-                    flexShrink: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
+                  style={iconButtonStyle}
                 >
                   <FaUndo size={11} />
                 </DialogButton>

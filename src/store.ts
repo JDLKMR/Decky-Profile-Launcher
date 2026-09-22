@@ -46,6 +46,40 @@ export function effectiveProfileLabel(
   return override || profiles[value - 1] || `Profile ${value}`;
 }
 
+/**
+ * This game's display order, as a full permutation of 1..total — purely
+ * cosmetic sequencing, independent of which profiles are allowed. Anything
+ * stored that's out of range is dropped, and any profile not covered by the
+ * stored order (including ones added later) is appended at the end,
+ * ascending, so "no custom order" and "explicitly ascending" behave
+ * identically going forward.
+ */
+export function effectiveProfileOrder(
+  config: GameConfig | undefined,
+  total: number,
+): number[] {
+  const seen = new Set<number>();
+  const ordered: number[] = [];
+  for (const v of config?.profileOrder ?? []) {
+    if (v >= 1 && v <= total && !seen.has(v)) {
+      seen.add(v);
+      ordered.push(v);
+    }
+  }
+  for (let v = 1; v <= total; v++) {
+    if (!seen.has(v)) ordered.push(v);
+  }
+  return ordered;
+}
+
+/** True once the stored order actually differs from plain ascending. */
+export function hasCustomProfileOrder(
+  config: GameConfig | undefined,
+  total: number,
+): boolean {
+  return effectiveProfileOrder(config, total).some((v, i) => v !== i + 1);
+}
+
 export function snapshot(): Settings | null {
   return cache;
 }

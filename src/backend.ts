@@ -16,6 +16,14 @@ export interface GameConfig {
   configured?: boolean;
   /** Per-game display name overrides, keyed by profile number as a string. */
   profileNames?: Record<string, string>;
+  /**
+   * Per-game display order, as global profile numbers — purely cosmetic,
+   * the script still gets the same PROFILE value regardless of position.
+   * Empty or missing = default ascending order. Any profile number not
+   * listed here (including ones added later) is appended at the end,
+   * ascending.
+   */
+  profileOrder?: number[];
 }
 
 export interface Settings {
