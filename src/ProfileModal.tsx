@@ -3,19 +3,13 @@ import { FC, useRef, useState } from "react";
 import type { PromptEntry } from "./links";
 
 export interface ProfileChoice {
-  /** What was picked, or null if the launch was cancelled or left unchanged. */
+  /** What was picked, or null if the launch was cancelled. */
   entry: PromptEntry | null;
   /** false = stop prompting for this game from now on. */
   keepAsking: boolean;
-  /** true = launch without touching the script. */
-  skipWrite?: boolean;
 }
 
 interface Props {
-  gameName: string;
-  scriptName: string;
-  variable: string;
-  currentValue: string | null;
   /** Script profiles and shortcut links, already merged and ordered. */
   entries: PromptEntry[];
   /** Key of the entry to pre-select, or null if none applies. */
@@ -25,10 +19,6 @@ interface Props {
 }
 
 const ProfileModal: FC<Props> = ({
-  gameName,
-  scriptName,
-  variable,
-  currentValue,
   entries,
   defaultKey,
   onResult,
@@ -49,14 +39,7 @@ const ProfileModal: FC<Props> = ({
       onCancel={() => settle({ entry: null, keepAsking })}
       onEscKeypress={() => settle({ entry: null, keepAsking })}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-        <div style={{ fontSize: "1.4em", fontWeight: "bold" }}>Choose a profile</div>
-        <div style={{ opacity: 0.7, fontSize: "0.9em" }}>
-          {gameName}
-          {scriptName ? ` · ${scriptName}` : ""}
-          {currentValue !== null ? ` (currently ${variable}=${currentValue})` : ""}
-        </div>
-      </div>
+      <div style={{ fontSize: "1.4em", fontWeight: "bold" }}>Select Profile</div>
 
       <Focusable
         style={{
@@ -94,8 +77,7 @@ const ProfileModal: FC<Props> = ({
 
       <div style={{ marginTop: "16px" }}>
         <ToggleField
-          label="Ask every time for this game"
-          description="Turn this off to keep launching with the profile you pick now. You can turn it back on from the Profile Launcher menu."
+          label="Always ask for this game"
           checked={keepAsking}
           onChange={setKeepAsking}
         />
@@ -105,13 +87,8 @@ const ProfileModal: FC<Props> = ({
         style={{ display: "flex", gap: "8px", marginTop: "8px" }}
         flow-children="horizontal"
       >
-        <DialogButton
-          onClick={() => settle({ entry: null, keepAsking, skipWrite: true })}
-        >
-          Launch unchanged
-        </DialogButton>
         <DialogButton onClick={() => settle({ entry: null, keepAsking })}>
-          Cancel launch
+          Cancel
         </DialogButton>
       </Focusable>
     </ModalRoot>

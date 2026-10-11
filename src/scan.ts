@@ -1,6 +1,6 @@
 import { resolveScript } from "./backend";
 import { getLaunchInfo, listLibraryApps } from "./steam";
-import { clearNoScript, markNoScript, refresh, snapshot, updateGame } from "./store";
+import { refresh, snapshot, updateGame } from "./store";
 
 export interface ScanProgress {
   done: number;
@@ -9,15 +9,15 @@ export interface ScanProgress {
 }
 
 /**
- * Walk the library and cache which apps launch a .sh. Not required — the
- * interceptor detects on first launch too — but it makes that first launch
- * instant instead of kill-and-relaunch.
+ * Walk the library and record which apps launch a .sh. Never required — the
+ * interceptor checks any game it hasn't detected a script for on each launch,
+ * so a newly added .sh is picked up on its own — but scanning ahead of time
+ * makes that first launch instant instead of kill-and-relaunch, and fills the
+ * games list before you've launched anything.
  */
 export async function scanLibrary(
   onProgress?: (progress: ScanProgress) => void,
 ): Promise<number> {
-  clearNoScript();
-
   const apps = listLibraryApps();
   const batchSize = 6;
   let done = 0;
@@ -44,8 +44,6 @@ export async function scanLibrary(
                 ? existing.enabled
                 : (snapshot()?.askByDefault ?? true),
             });
-          } else {
-            markNoScript(key);
           }
         } catch (e) {
           console.warn("[ProfileLauncher] scan failed for", appId, e);

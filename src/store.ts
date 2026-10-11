@@ -16,16 +16,6 @@ function emit() {
   if (cache) listeners.forEach((fn) => fn(cache!));
 }
 
-/**
- * Apps a scan proved have no .sh, kept in memory only: persisting one entry
- * per library game would balloon settings.json for no benefit.
- */
-const noScript = new Set<string>();
-
-export const markNoScript = (appId: string) => noScript.add(appId);
-export const hasNoScript = (appId: string) => noScript.has(appId);
-export const clearNoScript = () => noScript.clear();
-
 export function snapshot(): Settings | null {
   return cache;
 }

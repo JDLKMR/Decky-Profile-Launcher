@@ -2,7 +2,7 @@ import { toaster } from "@decky/api";
 import { resolveScript, writeProfile } from "./backend";
 import { LinkEntry, buildPromptEntries, hasLinks, pickDefaultKey } from "./links";
 import { promptForProfile } from "./ProfileModal";
-import { gameConfig, hasNoScript, markNoScript, snapshot, updateGame } from "./store";
+import { gameConfig, snapshot, updateGame } from "./store";
 import {
   cancelLaunch,
   getGameId,
@@ -73,11 +73,9 @@ async function onGameActionStart(rawGameActionId: string, action: string) {
 
   const config = gameConfig(appId);
 
-  if (config) {
+  if (config && (config.detected || hasLinks(config))) {
     // Prompting switched off: do nothing.
     if (!config.enabled) return;
-    // Known to have no script, and no shortcut links to offer either.
-    if (!config.detected && !hasLinks(config)) return;
 
     // A .sh game, a game with shortcut links, or both: stop the launch
     // immediately, then take our time.
@@ -91,22 +89,22 @@ async function onGameActionStart(rawGameActionId: string, action: string) {
     return;
   }
 
-  // Never configured and already known to have no script.
-  if (hasNoScript(appId)) return;
-
-  // First time we've seen this app. Look it up before deciding, and only
-  // interrupt if a script actually turns up. The first launch of a new
-  // .sh game therefore gets killed a beat late; after that it is cached.
+  // Everything else — never seen before, or last seen without a script — is
+  // checked on every launch, so giving a game a .sh launch path takes effect
+  // the next time it starts, with no re-scan. The lookup runs alongside the
+  // launch and only interrupts it if a script actually turns up; a game that
+  // has none just carries on, so this costs nothing visible. The first launch
+  // after a script appears is therefore killed a beat late; later ones are
+  // intercepted immediately.
   busy.add(appId);
   try {
     const info = await getLaunchInfo(Number(appId));
     const script = await resolveScript(info.exe, info.launchOptions);
 
-    if (!script.path) {
-      markNoScript(appId);
-      return;
-    }
+    if (!script.path) return;
 
+    // A fresh detection starts from the default prompting setting, same as a
+    // scan does — including a game that used to have a script and lost it.
     await updateGame(appId, {
       name: info.name,
       script: script.path,
@@ -141,7 +139,9 @@ async function handleLaunch(appId: string, knownGameId?: string) {
   if (!scriptUsable && !links.length) {
     // Nothing to offer: launch normally, saying why if there's something to fix.
     if (!script.path) {
-      await updateGame(appId, { detected: false, enabled: false, script: "" });
+      // Leave prompting as the person set it — this game gets re-checked on
+      // every launch, so a script added later is picked up on its own.
+      await updateGame(appId, { detected: false, script: "" });
     } else if (!script.exists) {
       toast("Profile Launcher", `Script not found: ${script.path}`);
     } else {
@@ -170,14 +170,7 @@ async function handleLaunch(appId: string, knownGameId?: string) {
   );
   const defaultKey = pickDefaultKey(entries, config);
 
-  const choice = await promptForProfile({
-    gameName: info.name,
-    scriptName: scriptUsable ? basename(script.path) : "",
-    variable,
-    currentValue: scriptUsable ? script.value : null,
-    entries,
-    defaultKey,
-  });
+  const choice = await promptForProfile({ entries, defaultKey });
 
   const picked = choice.entry;
   await updateGame(appId, {
@@ -189,10 +182,7 @@ async function handleLaunch(appId: string, knownGameId?: string) {
     ...(picked?.kind === "link" ? { lastLinkId: picked.linkId } : {}),
   });
 
-  if (!picked) {
-    if (choice.skipWrite) relaunch(appId, gameId);
-    return; // cancelled: leave the game closed
-  }
+  if (!picked) return; // cancelled: leave the game closed
 
   if (picked.kind === "link") {
     launchLink(picked);
