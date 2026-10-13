@@ -23,16 +23,23 @@ So for example, you can select the second profile in the launch prompt to set `P
 
 This minimizes the amount of split configuration (such as artwork, playtime, music, achievements, etc. if you have other plugins) between shortcuts and centralizes everything into one game shortcut.
 
-You can also set a Steam shortcut link as a profile, which instead of reading or editing the game's script, simply takes you to another Steam shortcut of your choosing and automatically opens it.
+You can also set a game shortcut as a profile, which instead of reading or editing the game's script, simply takes you to another Steam shortcut of your choosing and automatically opens it.
 
-Just watch out for Steam Input. It will be shared across all profiles (with the exception of Steam shortcut links), naturally.
+There is also a way that profiles can be applied without editing the script, which instead edits the game's launch options in Steam by making the `PROFILE` line read from the environment:
+
+```
+PROFILE="${PROFILE:-1}"
+```
+
+Just watch out for Steam Input. It will be shared across all profiles (with the exception of shortcut profiles since they're different games in Steam), naturally.
 
 ## Features
 - Works with both Steam and non-Steam games
 - Toggle whether a game always prompts you on launch
 - Add filename exclusions for .sh files
-- Change the name of the variable it looks for to edit in the script
-- Save backups of your scripts upon first-time use (can be toggled off)
+- Change the name of the variable it looks for to use from the script
+- Save backups of your scripts upon first-time use (only applies when the plugin edits scripts)
+- Optionally pass the profile through the game's Steam launch options so the script is never edited (see above)
 - Save another Steam shortcut as a profile which directly takes you to it and opens it
 
 ## Example Use

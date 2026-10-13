@@ -170,7 +170,7 @@ const RenameLinkModal: FC<RenameProps> = ({ title, currentName, onResult, closeM
 
 export function promptLinkName(
   currentName: string,
-  title = "Rename shortcut link",
+  title = "Rename shortcut profile",
 ): Promise<string | null> {
   return new Promise((resolve) => {
     showModal(

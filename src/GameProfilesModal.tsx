@@ -10,6 +10,7 @@ import {
   minLinkPosition,
   newLinkId,
 } from "./links";
+import { noteGameSettingsClosed } from "./panelMemory";
 import { gameConfig, snapshot, updateGame } from "./store";
 import { getLaunchInfo, getOverview } from "./steam";
 import { basename } from "./util";
@@ -36,7 +37,7 @@ interface Props {
  * names and order — come from its own script, re-read fresh every time this
  * opens (same as every launch), so there's nothing to edit for those; this
  * shows the prompt as it will appear. What's configurable here: whether
- * prompting happens at all, and this game's shortcut links.
+ * prompting happens at all, and this game's shortcut profiles.
  */
 const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
   const settings = snapshot();
@@ -48,6 +49,9 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
   const [scriptPath, setScriptPath] = useState(initial?.script ?? "");
   const [profiles, setProfiles] = useState<TableProfile[]>([]);
   const [name, setName] = useState(initial?.name || fallbackName || `App ${appId}`);
+
+  // Tell the QAM panel when this closes, so it can reopen the games list.
+  useEffect(() => () => noteGameSettingsClosed(appId), [appId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +107,7 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
 
   const addLink = async () => {
     const picked = await promptPickGame({
-      title: "Add shortcut link",
+      title: "Add shortcut profile",
       description:
         "Pick a game for this one's launch prompt to open. It will show up alongside the other profiles.",
       confirmLabel: "Add",
@@ -186,7 +190,7 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
           </div>
 
           <div style={{ marginTop: "16px", marginBottom: "4px", opacity: 0.7 }}>
-            Launch prompt, as it will appear
+            Launch prompt as it will appear
           </div>
 
           {entries.length > 0 ? (
@@ -234,14 +238,14 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
             loaded && (
               <div style={{ opacity: 0.8 }}>
                 {scriptPath
-                  ? "No PROFILE_NAMES table found yet. Add one to this script, or add a shortcut link below, to enable the launch prompt."
-                  : "This game doesn't use a .sh script. Add a shortcut link below and its launch prompt will offer the game itself first, then your links."}
+                  ? "No PROFILE_NAMES table found yet. Add one to this script, or add a shortcut profile below, to enable the launch prompt."
+                  : "This game doesn't use a .sh script. Add a shortcut profile below and its launch prompt will offer the game itself first, then your shortcut profiles."}
               </div>
             )
           )}
 
           <div style={{ marginTop: "16px", marginBottom: "4px", opacity: 0.7 }}>
-            Shortcut links
+            Shortcut profiles
           </div>
 
           {links.map((link) => {
@@ -257,7 +261,7 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
                     <div style={{ opacity: 0.6, fontSize: "0.85em" }}>
                       {target
                         ? `Opens ${target.display_name}`
-                        : "Linked game not found in your library"}
+                        : "Game not found in your library"}
                     </div>
                   </div>
                   <DialogButton
@@ -284,7 +288,7 @@ const GameProfilesModal: FC<Props> = ({ appId, fallbackName, closeModal }) => {
             );
           })}
 
-          <DialogButton onClick={() => void addLink()}>Add shortcut link...</DialogButton>
+          <DialogButton onClick={() => void addLink()}>Add shortcut profile...</DialogButton>
         </>
       )}
 

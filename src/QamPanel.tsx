@@ -7,11 +7,17 @@ import {
   ToggleField,
   showModal,
 } from "@decky/ui";
-import { FC, useEffect, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
+import { FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { GameConfig, Settings } from "./backend";
 import GameProfilesModal from "./GameProfilesModal";
 import { promptPickGame } from "./LinkModals";
 import { hasLinks } from "./links";
+import {
+  onGameSettingsClosed,
+  pendingReturnTarget,
+  rememberGameSettingsOpened,
+} from "./panelMemory";
 import { scanLibrary } from "./scan";
 import {
   dropGame,
@@ -27,13 +33,54 @@ import { basename, isExcluded } from "./util";
 const QamPanel: FC = () => {
   const [settings, setSettings] = useState<Settings | null>(snapshot());
   const [scanning, setScanning] = useState<string | null>(null);
+  // Starts open when this is the panel coming back after a game's settings
+  // were closed; an ordinary open starts collapsed.
+  const [gamesOpen, setGamesOpen] = useState(() => pendingReturnTarget() !== null);
   const [newExclusion, setNewExclusion] = useState("");
+  const [restoreFocusId, setRestoreFocusId] = useState<string | null>(null);
+  const settingsButtons = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
     const unsubscribe = subscribe((next) => setSettings({ ...next }));
     void refresh();
     return unsubscribe;
   }, []);
+
+  // Coming back from a game's settings: reopen the list and refocus that
+  // game. Handles both a panel that was rebuilt in the meantime (checked on
+  // mount) and one that stayed mounted (told when the modal closes).
+  useEffect(() => {
+    const restore = () => {
+      const target = pendingReturnTarget();
+      if (!target) return;
+      setGamesOpen(true);
+      setRestoreFocusId(target);
+    };
+    restore();
+    return onGameSettingsClosed(restore);
+  }, []);
+
+  useEffect(() => {
+    if (!restoreFocusId || !gamesOpen) return;
+    const focusRow = () => {
+      const row = settingsButtons.current.get(restoreFocusId);
+      const target =
+        row?.querySelector<HTMLElement>("button") ??
+        row?.querySelector<HTMLElement>("[role='button']") ??
+        row?.querySelector<HTMLElement>("[tabindex]");
+      if (!target) return;
+      target.focus();
+      target.scrollIntoView?.({ block: "center" });
+    };
+    // Steam sets its own initial focus as the panel appears; go after it, and
+    // once more in case it was late.
+    const timers = [
+      setTimeout(focusRow, 150),
+      setTimeout(focusRow, 600),
+      setTimeout(() => setRestoreFocusId(null), 800),
+    ];
+    return () => timers.forEach(clearTimeout);
+  }, [restoreFocusId, gamesOpen]);
 
   if (!settings) {
     return (
@@ -57,19 +104,19 @@ const QamPanel: FC = () => {
       parts.push(basename(config.script));
     }
     const n = config.links?.length ?? 0;
-    if (n) parts.push(`${n} shortcut link${n === 1 ? "" : "s"}`);
+    if (n) parts.push(`${n} shortcut profile${n === 1 ? "" : "s"}`);
     return parts.join(" · ");
   };
 
-  // Games with shortcut links are your own setup, not something detected, so
+  // Games with shortcut profiles are your own setup, not something detected, so
   // "forget" leaves them alone.
   const forgettable = games.filter(([, config]) => !hasLinks(config));
 
   const addLinkGame = async () => {
     const picked = await promptPickGame({
-      title: "Add shortcut links to a game",
+      title: "Add shortcut profiles to a game",
       description:
-        "Choose the game whose launch prompt should offer shortcut links. It doesn't need a .sh script.",
+        "Choose the game whose launch prompt should offer shortcut profiles. It doesn't need a .sh script.",
       confirmLabel: "Continue",
       askName: false,
     });
@@ -86,63 +133,94 @@ const QamPanel: FC = () => {
   const runScan = async () => {
     setScanning("Scanning…");
     try {
-      const found = await scanLibrary(({ done, total, found }) =>
+      const { found, pruned, unverified } = await scanLibrary(({ done, total, found }) =>
         setScanning(`${done}/${total} checked, ${found} found`),
       );
-      setScanning(`Done — ${found} script-launched game${found === 1 ? "" : "s"}`);
+      const parts = [`${found} script-launched game${found === 1 ? "" : "s"}`];
+      if (pruned) parts.push(`${pruned} removed`);
+      if (unverified) parts.push(`${unverified} couldn't be read`);
+      setScanning(`Done — ${parts.join(", ")}`);
     } catch (e) {
       setScanning(`Scan failed: ${e}`);
     }
-    setTimeout(() => setScanning(null), 4000);
+    setTimeout(() => setScanning(null), 5000);
   };
 
   return (
     <>
       <PanelSection title="Games">
         <PanelSectionRow>
-          <ButtonItem layout="below" disabled={!!scanning} onClick={runScan}>
-            {scanning ?? "Scan library for .sh launchers"}
+          <ButtonItem layout="below" onClick={() => setGamesOpen((open) => !open)}>
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+              }}
+            >
+              {gamesOpen ? <FaChevronDown size={11} /> : <FaChevronRight size={11} />}
+              {`Detected games (${games.length})`}
+            </span>
           </ButtonItem>
         </PanelSectionRow>
+
+        {gamesOpen && (
+          <>
+            <PanelSectionRow>
+              <ButtonItem layout="below" disabled={!!scanning} onClick={runScan}>
+                {scanning ?? "Scan library for .sh launchers"}
+              </ButtonItem>
+            </PanelSectionRow>
+
+            {games.length === 0 && (
+              <PanelSectionRow>
+                <Field
+                  label="Nothing detected yet"
+                  description="Scan your library, launch a game whose launch options point at a .sh file, or add shortcut profiles to a game."
+                  bottomSeparator="none"
+                  focusable
+                />
+              </PanelSectionRow>
+            )}
+
+            {games.map(([appId, config]) => (
+              <PanelSectionRow key={appId}>
+                <ToggleField
+                  label={config.name || `App ${appId}`}
+                  description={describe(config)}
+                  checked={config.enabled}
+                  onChange={(enabled) => void updateGame(appId, { enabled })}
+                />
+                <div
+                  ref={(el) => {
+                    if (el) settingsButtons.current.set(appId, el);
+                    else settingsButtons.current.delete(appId);
+                  }}
+                >
+                  <ButtonItem
+                    layout="below"
+                    onClick={() => {
+                      rememberGameSettingsOpened(appId);
+                      showModal(
+                        <GameProfilesModal appId={appId} fallbackName={config.name} />,
+                        window,
+                      );
+                    }}
+                  >
+                    Game Settings...
+                  </ButtonItem>
+                </div>
+              </PanelSectionRow>
+            ))}
+          </>
+        )}
 
         <PanelSectionRow>
           <ButtonItem layout="below" onClick={() => void addLinkGame()}>
-            Add shortcut links to a game...
+            Add shortcut profiles to a game...
           </ButtonItem>
         </PanelSectionRow>
-
-        {games.length === 0 && (
-          <PanelSectionRow>
-            <Field
-              label="Nothing detected yet"
-              description="Scan your library, launch a game whose launch options point at a .sh file, or add shortcut links to a game."
-              bottomSeparator="none"
-              focusable
-            />
-          </PanelSectionRow>
-        )}
-
-        {games.map(([appId, config]) => (
-          <PanelSectionRow key={appId}>
-            <ToggleField
-              label={config.name || `App ${appId}`}
-              description={describe(config)}
-              checked={config.enabled}
-              onChange={(enabled) => void updateGame(appId, { enabled })}
-            />
-            <ButtonItem
-              layout="below"
-              onClick={() =>
-                showModal(
-                  <GameProfilesModal appId={appId} fallbackName={config.name} />,
-                  window,
-                )
-              }
-            >
-              Game Settings...
-            </ButtonItem>
-          </PanelSectionRow>
-        ))}
       </PanelSection>
 
       <PanelSection title="Excluded scripts">
@@ -201,7 +279,7 @@ const QamPanel: FC = () => {
         <PanelSectionRow>
           <TextField
             label="Script variable"
-            description="The assignment rewritten inside the .sh file."
+            description="The variable set for each profile: rewritten inside the .sh file, or passed through launch options for scripts that read it from the environment."
             value={settings.variable}
             onChange={(e) => void updateSettings({ variable: e.target.value })}
           />
@@ -218,7 +296,7 @@ const QamPanel: FC = () => {
         <PanelSectionRow>
           <ToggleField
             label="Back up scripts once"
-            description="Writes a .launchprofiles.bak next to each script the first time it is edited."
+            description="Writes a .launchprofiles.bak next to each script the first time the plugin edits it. Only applies to scripts edited directly, not ones that take the profile from launch options."
             checked={settings.backup}
             onChange={(backup) => void updateSettings({ backup })}
           />

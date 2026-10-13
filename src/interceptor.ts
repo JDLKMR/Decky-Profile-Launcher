@@ -1,6 +1,7 @@
 import { toaster } from "@decky/api";
 import { resolveScript, writeProfile } from "./backend";
 import { LinkEntry, buildPromptEntries, hasLinks, pickDefaultKey } from "./links";
+import { withProfileEnv, withoutProfileEnv } from "./launchOptions";
 import { promptForProfile } from "./ProfileModal";
 import { gameConfig, snapshot, updateGame } from "./store";
 import {
@@ -8,8 +9,10 @@ import {
   getGameId,
   getLaunchInfo,
   getOverview,
+  msUntilKillsDone,
   resolveAppId,
   runGame,
+  setLaunchOptions,
 } from "./steam";
 import { basename } from "./util";
 
@@ -80,9 +83,10 @@ async function onGameActionStart(rawGameActionId: string, action: string) {
     // A .sh game, a game with shortcut links, or both: stop the launch
     // immediately, then take our time.
     busy.add(appId);
-    cancelLaunch(getGameId(Number(appId)));
+    const gameId = getGameId(Number(appId));
+    cancelLaunch(gameId);
     try {
-      await handleLaunch(appId);
+      await promptOrLaunch(appId, gameId);
     } finally {
       busy.delete(appId);
     }
@@ -105,17 +109,61 @@ async function onGameActionStart(rawGameActionId: string, action: string) {
 
     // A fresh detection starts from the default prompting setting, same as a
     // scan does — including a game that used to have a script and lost it.
-    await updateGame(appId, {
-      name: info.name,
-      script: script.path,
-      detected: true,
-      enabled: snapshot()?.askByDefault ?? true,
-    });
+    const promptNew = snapshot()?.askByDefault ?? true;
 
+    // New games default to no prompt: just record the game and let this
+    // launch carry on untouched. Cancelling it would force a prompt the
+    // person has said they don't want, and answering that prompt would
+    // overwrite the setting anyway.
+    if (!promptNew) {
+      await updateGame(appId, {
+        name: info.name,
+        script: script.path,
+        detected: true,
+        enabled: false,
+      });
+      return;
+    }
+
+    // Stop the launch before anything else — the config write below is a
+    // backend round trip the script shouldn't get to run through.
     cancelLaunch(info.gameId);
-    await handleLaunch(appId, info.gameId);
+
+    // The launch is already stopped, so a failed save mustn't abandon it:
+    // carry on and prompt anyway.
+    try {
+      await updateGame(appId, {
+        name: info.name,
+        script: script.path,
+        detected: true,
+        enabled: true,
+      });
+    } catch (e) {
+      console.warn("[ProfileLauncher] could not save newly detected game", e);
+    }
+
+    await promptOrLaunch(appId, info.gameId);
+  } catch (e) {
+    // Only the lookup above can land here (promptOrLaunch handles its own
+    // failures), and the launch hasn't been cancelled yet, so it just carries on.
+    console.warn("[ProfileLauncher] script lookup failed for", appId, e);
   } finally {
     busy.delete(appId);
+  }
+}
+
+/**
+ * Run the prompt flow for a launch that has already been cancelled. If
+ * anything throws partway, the game is down and nothing would bring it back,
+ * so fall back to launching it unchanged rather than leaving a dead launch.
+ */
+async function promptOrLaunch(appId: string, gameId: string) {
+  try {
+    await handleLaunch(appId, gameId);
+  } catch (e) {
+    console.error("[ProfileLauncher] launch handling failed; launching unchanged", e);
+    toast("Profile Launcher", "Something went wrong — launching unchanged.");
+    relaunch(appId, gameId);
   }
 }
 
@@ -155,13 +203,13 @@ async function handleLaunch(appId: string, knownGameId?: string) {
     return;
   }
 
-  // The shortcut links are still worth offering, but a script that's
+  // The shortcut profiles are still worth offering, but a script that's
   // referenced and missing is worth flagging.
   if (script.path && !script.exists) {
     toast("Profile Launcher", `Script not found: ${script.path}`);
   }
 
-  // One list: the script's profiles in table order, then shortcut links
+  // One list: the script's profiles in table order, then shortcut profiles
   // (each placed by its number override, or last, alphabetically).
   const entries = buildPromptEntries(
     scriptUsable ? script.profiles : [],
@@ -204,10 +252,38 @@ async function handleLaunch(appId: string, knownGameId?: string) {
     return;
   }
 
+  if (script.envAware) {
+    // The script takes PROFILE from the environment, so leave the file alone
+    // and pass the choice through the launch options instead.
+    try {
+      if (!info.loaded) throw new Error("couldn't read this game's launch options");
+      const next = withProfileEnv(info.launchOptions, variable, picked.value);
+      if (next !== info.launchOptions) setLaunchOptions(Number(appId), next);
+    } catch (e) {
+      toast("Profile Launcher — not launched", `Could not update launch options: ${e}`);
+      return;
+    }
+    relaunch(appId, gameId);
+    return;
+  }
+
   const result = await writeProfile(script.path, picked.value);
   if (!result.ok) {
     toast("Profile Launcher — not launched", result.error ?? "Could not update the script.");
     return;
+  }
+
+  // A game that used to pass its profile through launch options and now has
+  // a plain assignment in its script: drop the leftover from the launch
+  // options. The script's own line wins either way, so a failure here is
+  // only untidy and never stops the launch.
+  try {
+    const cleaned = withoutProfileEnv(info.launchOptions, variable);
+    if (info.loaded && cleaned !== info.launchOptions) {
+      setLaunchOptions(Number(appId), cleaned);
+    }
+  } catch (e) {
+    console.warn("[ProfileLauncher] could not clear leftover launch options", e);
   }
 
   relaunch(appId, gameId);
@@ -220,7 +296,7 @@ async function handleLaunch(appId: string, knownGameId?: string) {
  */
 function launchLink(entry: LinkEntry) {
   if (!getOverview(entry.targetAppId)) {
-    toast("Profile Launcher", `Linked game not found: ${entry.label}`);
+    toast("Profile Launcher", `Game not found for shortcut profile: ${entry.label}`);
     return;
   }
   runGame(getGameId(entry.targetAppId));
@@ -228,10 +304,14 @@ function launchLink(entry: LinkEntry) {
 
 function relaunch(appId: string, gameId: string) {
   bypass.add(appId);
-  // Give Steam a moment to finish tearing down the cancelled game action.
+  // Give Steam a moment to finish tearing down the cancelled game action —
+  // and if cancelLaunch still has kill attempts scheduled (a relaunch with no
+  // prompt in between, like a script with no profile table), wait for them
+  // too, or one would terminate the game we're about to start.
+  const delay = Math.max(400, msUntilKillsDone(gameId) + 150);
   setTimeout(() => {
     runGame(gameId);
     // Safety net: if the launch never reaches us, clear the bypass.
     setTimeout(() => bypass.delete(appId), 10000);
-  }, 400);
+  }, delay);
 }

@@ -44,6 +44,20 @@ def _profile_pattern(var: str) -> "re.Pattern[str]":
     )
 
 
+_SHELL_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _is_env_aware(var: str, value: str, quote: str) -> bool:
+    """True when the script's `VAR=` line takes its value from the environment
+    — `PROFILE="${PROFILE:-1}"`, `PROFILE=${PROFILE:=1}` — so the plugin can
+    pass the profile through the Steam launch options and leave the file
+    alone. A plain `PROFILE=2` would override anything passed in, and a
+    single-quoted value isn't expanded by the shell at all."""
+    if quote == "'" or not _SHELL_NAME_RE.fullmatch(var or ""):
+        return False
+    return re.match(r"\$\{" + re.escape(var) + r":?[-=]", value or "") is not None
+
+
 _PROFILE_NAMES_START_RE = re.compile(r'declare\s+-A\s+PROFILE_NAMES\s*=\s*\(')
 _PROFILE_NAMES_ENTRY_RE = re.compile(
     r'\[\s*(?P<key>\d+)\s*\]\s*=\s*'
@@ -274,6 +288,7 @@ class Plugin:
             "exists": os.path.isfile(chosen),
             "hasVariable": False,
             "value": None,
+            "envAware": False,
             "excluded": False,
             "profiles": [],
         }
@@ -288,6 +303,9 @@ class Plugin:
             if match:
                 result["hasVariable"] = True
                 result["value"] = match.group("value")
+                result["envAware"] = _is_env_aware(
+                    var, match.group("value"), match.group("quote")
+                )
             result["profiles"] = _parse_profile_table(text)
         return result
 

@@ -57,6 +57,12 @@ export interface ScriptInfo {
   exists: boolean;
   hasVariable: boolean;
   value: string | null;
+  /**
+   * True when the script's variable line takes its value from the environment
+   * (`PROFILE="${PROFILE:-1}"`), so a profile can be passed through the Steam
+   * launch options instead of editing the file.
+   */
+  envAware?: boolean;
   /** True when a .sh was found but every candidate was excluded by name. */
   excluded?: boolean;
   /**
